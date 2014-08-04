@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Dynamic;
 using System.Linq;
 using System.Net;
 using System.Text;
@@ -14,17 +15,13 @@ namespace UserThrottling {
 		readonly TimeSpan _timeStep;
 		readonly TimeSpan _overrideCookieTimeout;
 
-		public string AjaxThrottlingMessage = "You are being throttled due to excessive usage, please refresh the page";
-
 		readonly static object _lockObject = new object();
 		ConcurrentDictionary<string,ConcurrentLong> _throttlePerUser = new ConcurrentDictionary<string,ConcurrentLong>();
 		DateTime _lastClean = DateTime.Now;
 
-
-		public string _resetThrottleUrl = "/reset-throttle.axd";
-
-		public const string DisableUserThrottlingCookieName = "__nouserthrottling";
-		public const string UserThrottlingDisabledActiveCookieName= "__nouserthrottlingactive";
+		const string ActivateUserThrottlingCookieName = "__activate_no_user_throttling";
+		const string UserThrottlingDisabledActiveCookieName= "__no_user_throttling_active";
+		const string AjaxThrottlingMessage = "You are being throttled due to excessive usage, please refresh the page";
 
 		public UserThrottlingActionFilterAttribute(long requestsPerTimeStep, TimeSpan timeStep, TimeSpan overrideCookieTimeout) {
 			_timeStep = timeStep;
@@ -54,29 +51,29 @@ namespace UserThrottling {
 				return;
 			}
 
-			if(IsThrottleOverriden(filterContext)) {
+			if(IsThrottlingDisabledByUser(filterContext)) {
 				return;
 			}
 
 			filterContext.HttpContext.Response.StatusCode = (int)HttpStatusCode.Conflict;
 
 			if(filterContext.HttpContext.Request.IsAjaxRequest()) {
-				filterContext.Result = new ContentResult { Content = string.Format(AjaxThrottlingMessage, _resetThrottleUrl) };
+				filterContext.Result = new ContentResult { Content = AjaxThrottlingMessage };
 				return;
 			}
 
-			filterContext.Result = 
-			new ViewResult() { 
+			var result = new ViewResult { 
 				ViewName = "Throttling",
-				ViewData = new ViewDataDictionary()
+				ViewData = new ViewDataDictionary(),
 			};
-			//ViewEngines.Engines.FindView(filterContext.Controller.ControllerContext,"throttling",null);
 
-			//filterContext.Result = new RedirectResult(_resetThrottleUrl,false);
+			result.ViewBag.ActivateUserThrottlingCookieName = ActivateUserThrottlingCookieName;
+
+			filterContext.Result = result;
 		}
 
-		private bool IsThrottleOverriden(ActionExecutingContext filterContext) {
-			var overrideCookie = filterContext.HttpContext.Request.Cookies[DisableUserThrottlingCookieName];
+		private bool IsThrottlingDisabledByUser(ActionExecutingContext filterContext) {
+			var overrideCookie = filterContext.HttpContext.Request.Cookies[ActivateUserThrottlingCookieName];
 			if(overrideCookie==null) {
 				return IsThrottleOverrideActive(filterContext);
 			}
@@ -115,7 +112,5 @@ namespace UserThrottling {
 				_lastClean = DateTime.Now;
 			}
 		}
-
-		
 	}
 }
