@@ -14,6 +14,7 @@ namespace UserThrottling.MvcExample {
 	public class MvcApplication:System.Web.HttpApplication {
 		public static void RegisterGlobalFilters(GlobalFilterCollection filters) {
 			filters.Add(new HandleErrorAttribute());
+			filters.Add(new UserThrottlingActionFilterAttribute(5,TimeSpan.FromSeconds(1)));
 		}
 
 		public static void RegisterRoutes(RouteCollection routes) {
