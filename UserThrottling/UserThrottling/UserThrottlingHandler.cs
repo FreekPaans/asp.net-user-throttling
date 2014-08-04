@@ -30,6 +30,7 @@ namespace UserThrottling {
 
 		internal void Handle(ActionExecutingContext context) {
 			_filterContext= context;
+
 			if(!IsAuthenticated()) {
 				return;
 			}
@@ -38,7 +39,7 @@ namespace UserThrottling {
 				return;
 			}
 
-			if(IsThrottlingDisabledByUserRequest(_filterContext)) {
+			if(IsThrottlingDisabledByUserRequest()) {
 				return;
 			}
 
@@ -103,21 +104,28 @@ namespace UserThrottling {
 			return _filterContext.HttpContext.Request.IsAuthenticated;
 		}
 
-		private bool IsThrottlingDisabledByUserRequest(ActionExecutingContext filterContext) {
-			var overrideCookie = filterContext.HttpContext.Request.Cookies[ActivateUserThrottlingCookieName];
-
-			if(overrideCookie==null) {
-				return IsThrottleOverrideActive(filterContext);
+		private bool IsThrottlingDisabledByUserRequest() {
+			if(DoesUserWantToActivateOverrideThrottling()) {
+				DeletActivationCookie();
+				SetOverrideCookieActive();
+				return true;
 			}
 
-			DeletOverrideCookie(overrideCookie);
-			SetOverrideCookieActive(filterContext);
-
-			return true;
+			
+			return IsThrottleOverrideActive();
+			
 		}
 
-		private void SetOverrideCookieActive(ActionExecutingContext filterContext) {
-			filterContext.HttpContext.Response.Cookies.Add(
+		private bool DoesUserWantToActivateOverrideThrottling() {
+			return GetActivateOverrideThrottlingCookie()!=null;
+		}
+
+		private HttpCookie GetActivateOverrideThrottlingCookie() {
+			return _filterContext.HttpContext.Request.Cookies[ActivateUserThrottlingCookieName];
+		}
+
+		private void SetOverrideCookieActive() {
+			_filterContext.HttpContext.Response.Cookies.Add(
 				new HttpCookie(UserThrottlingDisabledActiveCookieName, "true") { 
 					Expires = DateTime.Now.Add(_overrideCookieTimeout),
 					Path = "/"
@@ -125,13 +133,14 @@ namespace UserThrottling {
 			);
 		}
 
-		private void DeletOverrideCookie(HttpCookie overrideCookie) {
+		private void DeletActivationCookie() {
+			var overrideCookie = GetActivateOverrideThrottlingCookie();
 			overrideCookie.Expires = DateTime.Now.AddHours(-1);
 			_filterContext.HttpContext.Response.Cookies.Add(overrideCookie);
 		}
 
-		private bool IsThrottleOverrideActive(ActionExecutingContext filterContext) {
-			return filterContext.HttpContext.Request[UserThrottlingDisabledActiveCookieName]!=null;
+		private bool IsThrottleOverrideActive() {
+			return _filterContext.HttpContext.Request[UserThrottlingDisabledActiveCookieName]!=null;
 		}
 
 		private void RefreshThrottlingIfNecessary() {
