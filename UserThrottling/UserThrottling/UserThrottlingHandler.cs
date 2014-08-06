@@ -14,18 +14,22 @@ namespace UserThrottling {
 		DateTime _lastClean = DateTime.Now;
 
 		const string ActivateUserThrottlingCookieName = "__activate_no_user_throttling";
-		const string UserThrottlingDisabledActiveCookieName= "__no_user_throttling_active";
+		const string UserThrottlingDisabledActiveCookieName= "__user_throttling_disabled";
+		const string UserIsThrottledCookieName= "__user_is_throttled";
+
 		const string AjaxThrottlingMessage = "You are being throttled due to excessive usage, please refresh the page";
 
 		readonly TimeSpan _timeStep;
 		readonly long _requestsPerTimeStep;
-		readonly TimeSpan _overrideCookieTimeout;
+		//readonly TimeSpan _overrideCookieTimeout;
 		private ActionExecutingContext _filterContext;
+		readonly TimeSpan _throttleBackoff;
 		
-		public UserThrottlingHandler(TimeSpan timeStep,long requestsPerTimeStep,TimeSpan  overrideCookieTimeout) {
+		public UserThrottlingHandler(TimeSpan timeStep,long requestsPerTimeStep, TimeSpan throttleBackoff) {
 			_timeStep = timeStep;
 			_requestsPerTimeStep = requestsPerTimeStep;
-			_overrideCookieTimeout = overrideCookieTimeout;
+			_throttleBackoff = throttleBackoff;
+			//_overrideCookieTimeout = overrideCookieTimeout;
 		}
 
 		internal void Handle(ActionExecutingContext context) {
@@ -42,19 +46,32 @@ namespace UserThrottling {
 			if(IsThrottlingDisabledByUserRequest()) {
 				return;
 			}
-
-			RefreshThrottlingIfNecessary();
+						
+			if(UserIsBeingThrottled()) {
+				SetThrottlingResult();
+				return;
+			}
 
 			if(IncrementCounterForUserAndCheckIfLimitReached(GetAuthenticatedUsername())) {
-				ApplyThrottling();
+				StartThrottling();
+				return;
 			}
 		}
 
-		private void ApplyThrottling() {
-			BuildResult();
+		private bool UserIsBeingThrottled() {
+			return _filterContext.HttpContext.Request.Cookies[UserIsThrottledCookieName]!=null;
 		}
 
-		private void BuildResult() {
+		private void StartThrottling() {
+			_filterContext.HttpContext.Response.Cookies.Add(new HttpCookie(UserIsThrottledCookieName,"true") {
+				Expires = DateTime.Now.Add(_throttleBackoff),
+				Path = "/"
+			});
+
+			SetThrottlingResult();
+		}
+
+		private void SetThrottlingResult() {
 			_filterContext.HttpContext.Response.StatusCode = (int)HttpStatusCode.Conflict;
 
 			if(_filterContext.HttpContext.Request.IsAjaxRequest()) {
@@ -81,6 +98,8 @@ namespace UserThrottling {
 		}
 
 		private bool IncrementCounterForUserAndCheckIfLimitReached(string username) {
+			FlushThrottleCounterIfNecessary();
+
 			var counter = _throttlePerUser.GetOrAdd(username,ConcurrentLong.Zero);
 
 			var lastValue = counter.Increment();
@@ -126,11 +145,15 @@ namespace UserThrottling {
 
 		private void SetOverrideCookieActive() {
 			_filterContext.HttpContext.Response.Cookies.Add(
-				new HttpCookie(UserThrottlingDisabledActiveCookieName, "true") { 
-					Expires = DateTime.Now.Add(_overrideCookieTimeout),
+				new HttpCookie(UserThrottlingDisabledActiveCookieName, "true") {
+					Expires = DateTime.Now.Add(CalculateMaximumThrottledForPeriod()),
 					Path = "/"
 				}
 			);
+		}
+
+		private TimeSpan CalculateMaximumThrottledForPeriod() {
+			return _throttleBackoff.Add(_timeStep);
 		}
 
 		private void DeletActivationCookie() {
@@ -143,7 +166,7 @@ namespace UserThrottling {
 			return _filterContext.HttpContext.Request[UserThrottlingDisabledActiveCookieName]!=null;
 		}
 
-		private void RefreshThrottlingIfNecessary() {
+		private void FlushThrottleCounterIfNecessary() {
 			lock(_lockObject) {
 				if((DateTime.Now - _lastClean) < _timeStep) {
 					return;

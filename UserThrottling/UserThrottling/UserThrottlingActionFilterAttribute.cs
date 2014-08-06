@@ -11,13 +11,7 @@ using System.Web.Mvc;
 
 namespace UserThrottling {
 	public class UserThrottlingActionFilterAttribute : ActionFilterAttribute{
-		//readonly long _requestsPerTimeStep;
-		//readonly TimeSpan _timeStep;
-		//readonly TimeSpan _overrideCookieTimeout;
-
 		readonly UserThrottlingHandler _throttlingHandler;
-
-		
 
 		public UserThrottlingActionFilterAttribute(long requestsPerTimeStep, TimeSpan timeStep, TimeSpan overrideCookieTimeout) {
 			_throttlingHandler = new UserThrottlingHandler(timeStep,requestsPerTimeStep,overrideCookieTimeout);
