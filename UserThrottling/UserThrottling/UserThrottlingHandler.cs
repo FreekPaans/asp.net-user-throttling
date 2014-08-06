@@ -5,6 +5,7 @@ using System.Linq;
 using System.Net;
 using System.Text;
 using System.Web;
+using System.Web.Caching;
 using System.Web.Mvc;
 
 namespace UserThrottling {
@@ -21,7 +22,6 @@ namespace UserThrottling {
 
 		readonly TimeSpan _timeStep;
 		readonly long _requestsPerTimeStep;
-		//readonly TimeSpan _overrideCookieTimeout;
 		private ActionExecutingContext _filterContext;
 		readonly TimeSpan _throttleBackoff;
 		
@@ -29,7 +29,6 @@ namespace UserThrottling {
 			_timeStep = timeStep;
 			_requestsPerTimeStep = requestsPerTimeStep;
 			_throttleBackoff = throttleBackoff;
-			//_overrideCookieTimeout = overrideCookieTimeout;
 		}
 
 		internal void Handle(ActionExecutingContext context) {
@@ -53,22 +52,65 @@ namespace UserThrottling {
 			}
 
 			if(IncrementCounterForUserAndCheckIfLimitReached(GetAuthenticatedUsername())) {
+				//_filterContext.
+				SetThrottledBy("Counter");
 				StartThrottling();
 				return;
 			}
 		}
 
 		private bool UserIsBeingThrottled() {
+			//throttling is done 2 ways: via a node specific cache and via a cookie, this is necessary for 2 reasons: 
+			// - we can't rely on cookies alone, because if the same request is being issued multiple times it won't contain the new cookie
+			// - we do rely on a cookie to get a consistent experience across multiple nodes => either all will report the user is being throttled, or none will. This is necessary because this allows the user to bypass the throttling
+
+			if(UserIsThrottledViaCookie()) {
+				SetThrottledBy("Cookie");
+				return true;
+			}
+			if(UserIsThrottledViaCache()) {
+				SetThrottledBy("Cache");
+				return true;
+			}
+
+			return false;
+		}
+
+		private void SetThrottledBy(string by) {
+			_filterContext.HttpContext.Response.Headers["X-Throttled-By"] = by;
+		}
+
+		private bool UserIsThrottledViaCache() {
+			if(HttpRuntime.Cache[GetAuthenticatedUsername()]!=null) {
+				return true;
+			}
+			return false;
+		}
+
+		private bool UserIsThrottledViaCookie() {
 			return _filterContext.HttpContext.Request.Cookies[UserIsThrottledCookieName]!=null;
 		}
 
 		private void StartThrottling() {
-			_filterContext.HttpContext.Response.Cookies.Add(new HttpCookie(UserIsThrottledCookieName,"true") {
-				Expires = DateTime.Now.Add(_throttleBackoff),
-				Path = "/"
-			});
+			SetThrottlingInCookie();
+			SetThrottlingInCache();
 
 			SetThrottlingResult();
+		}
+
+		private void SetThrottlingInCache() {
+			HttpRuntime.Cache.Add(GetAuthenticatedUsername(), true,null,CalculateThrottleEnd(),Cache.NoSlidingExpiration,CacheItemPriority.Low,null);
+		}
+
+		private void SetThrottlingInCookie() {
+			_filterContext.HttpContext.Response.Cookies.Add(new HttpCookie(UserIsThrottledCookieName,"true") {
+				Expires = CalculateThrottleEnd(),
+				Path = "/"
+			});
+		}
+
+		private DateTime CalculateThrottleEnd() {
+			return DateTime.Now.Add(_throttleBackoff);
 		}
 
 		private void SetThrottlingResult() {
