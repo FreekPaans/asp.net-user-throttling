@@ -42,8 +42,10 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="ConcurrentLong.cs" />
+    <Compile Include="UserRequestsCounter.cs" />
     <Compile Include="UserThrottlingActionFilterAttribute.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
+    <Compile Include="UserThrottlingConfiguration.cs" />
     <Compile Include="UserThrottlingHandler.cs" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />

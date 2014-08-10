@@ -11,15 +11,23 @@ using System.Web.Mvc;
 
 namespace UserThrottling {
 	public class UserThrottlingActionFilterAttribute : ActionFilterAttribute{
-		readonly UserThrottlingHandler _throttlingHandler;
-
-		public UserThrottlingActionFilterAttribute(long requestsPerTimeStep, TimeSpan timeStep, TimeSpan overrideCookieTimeout) {
-			_throttlingHandler = new UserThrottlingHandler(timeStep,requestsPerTimeStep,overrideCookieTimeout);
-
+		readonly UserRequestsCounter _counter;
+		readonly UserThrottlingConfiguration _config;
+		
+		public UserThrottlingActionFilterAttribute(UserThrottlingConfiguration config) {
+			_config = config;
+			_counter = new UserRequestsCounter(config.RequestsPerTimeStep,config.TimeStep);
 		}
 
 		public override void OnActionExecuting(ActionExecutingContext filterContext) {
-			_throttlingHandler.Handle(filterContext);
+			if(!HasTimeStep()) {
+				return;
+			}
+			new UserThrottlingHandler(_config.ThrottleBackoff, filterContext,_counter).Handle();
+		}
+
+		private bool HasTimeStep() {
+			return _config.TimeStep!=TimeSpan.Zero;
 		}
 	}
 }
