@@ -14,6 +14,15 @@ namespace UserThrottling {
 		readonly UserRequestsCounter _counter;
 		readonly UserThrottlingConfiguration _config;
 		
+		public UserThrottlingActionFilterAttribute(long requestsPerTimeStep, long timestepSeconds, long throttleBackoffSeconds)  
+			: this(new UserThrottlingConfiguration {
+				RequestsPerTimeStep = requestsPerTimeStep,
+				ThrottleBackoff = TimeSpan.FromSeconds(throttleBackoffSeconds),
+				TimeStep = TimeSpan.FromSeconds(timestepSeconds)
+			}) {
+
+		}
+
 		public UserThrottlingActionFilterAttribute(UserThrottlingConfiguration config) {
 			_config = config;
 			_counter = new UserRequestsCounter(config.RequestsPerTimeStep,config.TimeStep);
