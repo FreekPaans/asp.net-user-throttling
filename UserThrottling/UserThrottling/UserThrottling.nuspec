@@ -1,0 +1,20 @@
+<?xml version="1.0"?>
+<package>
+  <metadata>
+    <id>asp.net-user-throttling</id>
+    <version>$version$</version>
+    <title>$title$</title>
+    <authors>$author$</authors>
+    <owners>$author$</owners>
+    <licenseUrl>https://github.com/FreekPaans/asp.net-user-throttling/LICENSE</licenseUrl>
+    <projectUrl>https://github.com/FreekPaans/asp.net-user-throttling</projectUrl>
+    <requireLicenseAcceptance>false</requireLicenseAcceptance>
+    <description>$description$</description>
+    <releaseNotes>First release</releaseNotes>
+    <copyright>Copyright 2014</copyright>
+    <tags>asp.net throttling mvc</tags>
+  </metadata>
+	<files>
+		<file src="views\Throttling.cshtml" target="content\Views\Shared\Throttling.cshtml" />
+	</files>
+</package>
